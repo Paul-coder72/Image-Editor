@@ -3,9 +3,7 @@ from tkinter import filedialog, Menu, Canvas, messagebox
 from PIL import Image, ImageTk
 import struct
 from math import sin, cos, tan, pi, sqrt
-import threading
 import os
-import sys
 import ctypes
 
 
