@@ -104,10 +104,28 @@ def filtre_inverse_sqrt(triplet):
     b_new = fast_inverse_sqrt(b)
     return (r_new, g_new, b_new)
 
+custom_color = None
+
+def filtre_personnalisé(triplet):
+    global custom_color
+    if custom_color is None:
+        result = colorchooser.askcolor(title="Choisissez une couleur pour le filtre personnalisé")
+        if result[0] is None:  
+            custom_color = (255, 255, 255)
+        else:
+            custom_color = tuple(map(int, result[0]))
+    r, g, b = triplet
+    new_r = min(255, int((r + custom_color[0]) / 2))
+    new_g = min(255, int((g + custom_color[1]) / 2))
+    new_b = min(255, int((b + custom_color[2]) / 2))
+    return (new_r, new_g, new_b)
+
+
 def appliquer_filtre():
     global image, photo, image_orig
     if image_orig is None:
         return
+    save_state() 
     if filtre_actif == "défaut":
         image = image_orig.copy()
     else:
@@ -136,7 +154,10 @@ def appliquer_filtre():
                     pixels[i, j] = filtre_lumineux(pixel)
                 elif filtre_actif == "inverse_sqrt":
                     pixels[i, j] = filtre_inverse_sqrt(pixel)
+                elif filtre_actif == "personnalisé":
+                    pixels[i, j] = filtre_personnalisé(pixel)
     update_canvas(image)
+
 
 def set_filtre(filtre):
     global filtre_actif
@@ -219,7 +240,7 @@ def a_propos():
         version = "Inconnue"
     messagebox.showinfo("À propos", 
                         "Éditeur d'image\n"
-                        f"Version {version}\n"
+                        f"Version {version}"
                         "© 2025")
 
 def help():
@@ -234,8 +255,8 @@ def help():
                         "Zoom: Utilisez la molette de la souris\n"
                         "Déplacer l'image: Clic droit + déplacer\n"
                         "--------------------------------------------\n"
-                        "Dessin: Activez le mode dessin dans le menu Dessin"
-                        "Gomme: Activez la gomme dans le menu Dessin"
+                        "Dessin: Activez le mode dessin dans le menu Dessin\n"
+                        "Gomme: Activez la gomme dans le menu Dessin\n"
                         "Couleur et taille: Menu Dessin\n"
                         )
 
@@ -352,6 +373,44 @@ def resize_image(zoom_factor):
     current_zoom *= zoom_factor
     update_canvas(image)
 
+MAX_UNDO = 20
+undo_stack = []
+redo_stack = []
+
+
+def save_state():
+    global undo_stack, redo_stack, image
+    if image is not None:
+        undo_stack.append(image.copy())
+        if len(undo_stack) > MAX_UNDO:
+            undo_stack.pop(0)
+        redo_stack.clear()
+        print("Etat sauvegardé. Taille undo_stack =", len(undo_stack))
+
+
+
+def undo():
+    global image, image_orig, undo_stack, redo_stack
+    if undo_stack:
+        redo_stack.append(image.copy())
+        image = undo_stack.pop()
+        image_orig = image.copy() 
+        update_canvas(image)
+    else:
+        messagebox.showinfo("Annuler", "Plus rien à annuler.")
+
+def redo():
+    global image, image_orig, undo_stack, redo_stack
+    if redo_stack:
+        undo_stack.append(image.copy())
+        image = redo_stack.pop()
+        image_orig = image.copy()
+        update_canvas(image)
+    else:
+        messagebox.showinfo("Rétablir", "Plus rien à rétablir.")
+
+
+
 root = tk.Tk()
 root.geometry("800x600")
 root.title("Éditeur d'image")
@@ -386,22 +445,25 @@ menu_file.add_command(label="Ouvrir", command=ouvrir_image)
 menu_file.add_command(label="Enregistrer", command=enregistrer_image)
 menu_file.add_command(label="Enregistrer sous", command=enregistrer_image_sous)
 menu_file.add_separator()
+menu_file.add_command(label="Annuler", command=lambda: undo())
+menu_file.add_command(label="Rétablir", command=lambda: redo())
+menu_file.add_separator()
 menu_file.add_command(label="Quitter", command=root.quit)
 menubar.add_cascade(label="Fichier", menu=menu_file)
 
 menu_filter = Menu(menubar, tearoff=0)
 menu_filter.add_command(label="Aucun", command=lambda: set_filtre("défaut"))
 menu_filter.add_separator()
-menu_filter.add_command(label="Inverser", command=lambda: set_filtre("inverser"))
-menu_filter.add_separator()
 menu_filter.add_command(label="Sinus", command=lambda: set_filtre("sinus"))
 menu_filter.add_command(label="Cosinus", command=lambda: set_filtre("cosinus"))
 menu_filter.add_command(label="Tangente", command=lambda: set_filtre("tangente"))
-menu_filter.add_command(label="Inverse sqrt", command=lambda: set_filtre("inverse_sqrt"))
+menu_filter.add_command(label="Racine Inverse", command=lambda: set_filtre("inverse_sqrt"))
 menu_filter.add_separator()
+menu_filter.add_command(label="Personnalisé", command=lambda: set_filtre("personnalisé"))
 menu_filter.add_command(label="Niveaux de gris", command=lambda: set_filtre("gris"))
 menu_filter.add_command(label="Noir et blanc", command=lambda: set_filtre("noir_et_blanc"))
 menu_filter.add_command(label="Sépia", command=lambda: set_filtre("sepia"))
+menu_filter.add_command(label="Inverser", command=lambda: set_filtre("inverser"))
 menu_filter.add_separator()
 menu_filter.add_command(label="Contraste", command=lambda: set_filtre("contraste"))
 menu_filter.add_command(label="Luminosité", command=lambda: set_filtre("lumineux"))
@@ -424,10 +486,8 @@ menubar.add_cascade(label="Nouveau", menu=menu_new)
 menu_draw = Menu(menubar, tearoff=0)
 menu_draw.add_command(label="Activer/désactiver le mode dessin", command=draw_mode)
 menu_draw.add_command(label="Activer/désactiver la gomme", command=erase_mode)
-menu_draw.add_separator()
 menu_draw.add_command(label="Couleur du crayon", command=pen_color_func)
 menu_draw.add_command(label="Épaisseur du crayon", command=pen_thickness)
-menu_draw.add_separator()
 menu_draw.add_command(label="Effacer le dessin", command=clear_drawing)
 menubar.add_cascade(label="Dessin", menu=menu_draw)
 
@@ -437,8 +497,8 @@ menu_view.add_command(label="Pivoter à gauche", command=lambda: rotate_image(90
 menubar.add_cascade(label="Affichage", menu=menu_view)
 
 menu_help = Menu(menubar, tearoff=0)
-menu_help.add_command(label="À propos", command=a_propos)
 menu_help.add_command(label="Guide d'utilisation", command=help)
+menu_help.add_command(label="À propos", command=a_propos)
 menubar.add_cascade(label="Aide", menu=menu_help)
 
 root.config(menu=menubar)
